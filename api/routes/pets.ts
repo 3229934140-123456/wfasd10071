@@ -86,7 +86,7 @@ router.get("/:id", (req, res) => {
 });
 
 router.post("/", (req, res) => {
-  const { ownerName, ownerPhone, name, species, breed, gender, birthDate, weight, neutered } = req.body;
+  const { ownerName, ownerPhone, name, species, breed, gender, birthDate, weight, neutered, vaccinations } = req.body;
 
   let owner = db.prepare("SELECT id FROM owners WHERE phone = ?").get(ownerPhone) as any;
 
@@ -102,6 +102,30 @@ router.post("/", (req, res) => {
     )
     .run(owner.id, name, species, breed, gender, birthDate, weight, neutered ? 1 : 0);
 
+  const petId = result.lastInsertRowid as number;
+
+  if (Array.isArray(vaccinations) && vaccinations.length > 0) {
+    const insertVac = db.prepare(
+      `INSERT INTO vaccinations (pet_id, type, vaccine_name, vaccination_date, next_due_date, manufacturer)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    );
+    const insertAll = db.transaction((records: any[]) => {
+      for (const v of records) {
+        if (v.vaccineName && v.vaccinationDate) {
+          insertVac.run(
+            petId,
+            v.type || "vaccine",
+            v.vaccineName,
+            v.vaccinationDate,
+            v.nextDueDate || null,
+            v.manufacturer || null
+          );
+        }
+      }
+    });
+    insertAll(vaccinations);
+  }
+
   const pet = db
     .prepare(
       `SELECT p.*, o.name as owner_name, o.phone as owner_phone
@@ -109,7 +133,7 @@ router.post("/", (req, res) => {
        LEFT JOIN owners o ON p.owner_id = o.id
        WHERE p.id = ?`
     )
-    .get(result.lastInsertRowid) as any;
+    .get(petId) as any;
 
   res.json({
     success: true,
@@ -208,6 +232,7 @@ router.get("/:id/vaccinations", (req, res) => {
       return {
         id: v.id,
         petId: v.pet_id,
+        type: v.type || "vaccine",
         vaccineName: v.vaccine_name,
         vaccinationDate: v.vaccination_date,
         nextDueDate: v.next_due_date,

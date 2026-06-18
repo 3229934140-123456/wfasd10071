@@ -120,6 +120,13 @@ router.get("/prescriptions", (req, res) => {
 });
 
 router.get("/revisit-rate", (req, res) => {
+  const { month } = req.query;
+
+  let dateFilter = "";
+  if (month) {
+    dateFilter = `AND strftime('%Y-%m', visit_date) = '${month}'`;
+  }
+
   const stats = db
     .prepare(
       `SELECT diagnosis as disease,
@@ -130,7 +137,7 @@ router.get("/revisit-rate", (req, res) => {
                    ELSE 0 
               END as revisit_rate
        FROM medical_records
-       WHERE diagnosis IS NOT NULL AND diagnosis != ''
+       WHERE diagnosis IS NOT NULL AND diagnosis != '' ${dateFilter}
        GROUP BY diagnosis
        ORDER BY total_visits DESC
        LIMIT 8`

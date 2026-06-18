@@ -33,6 +33,7 @@ export interface Pet {
 export interface Vaccination {
   id: number;
   petId: number;
+  type: "vaccine" | "deworming";
   petName?: string;
   ownerName?: string;
   ownerPhone?: string;

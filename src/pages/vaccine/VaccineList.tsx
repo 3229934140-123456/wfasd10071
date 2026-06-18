@@ -1,25 +1,30 @@
 import { useEffect, useState } from "react";
-import { Syringe, AlertTriangle, Calendar, Search, Plus } from "lucide-react";
+import { Syringe, AlertTriangle, Calendar, Search, Bug } from "lucide-react";
 import type { Vaccination } from "@/types";
-import { useNavigate } from "react-router-dom";
 
 export default function VaccineList() {
-  const navigate = useNavigate();
   const [vaccinations, setVaccinations] = useState<Vaccination[]>([]);
   const [reminders, setReminders] = useState<Vaccination[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("reminders");
   const [searchTerm, setSearchTerm] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [typeFilter, statusFilter]);
 
   const loadData = async () => {
+    setLoading(true);
     try {
+      const params = new URLSearchParams();
+      if (typeFilter !== "all") params.append("type", typeFilter);
+      if (statusFilter !== "all") params.append("status", statusFilter);
+
       const [vacRes, remRes] = await Promise.all([
-        fetch("/api/vaccinations"),
-        fetch("/api/vaccinations/reminders"),
+        fetch(`/api/vaccinations?${params.toString()}`),
+        fetch(`/api/vaccinations/reminders?${params.toString()}`),
       ]);
       const vacData = await vacRes.json();
       const remData = await remRes.json();
@@ -56,6 +61,23 @@ export default function VaccineList() {
       default:
         return "已完成";
     }
+  };
+
+  const getTypeBadge = (type: string) => {
+    if (type === "deworming") {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-secondary-100 text-secondary-700">
+          <Bug className="w-3 h-3" />
+          驱虫
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-primary-100 text-primary-700">
+        <Syringe className="w-3 h-3" />
+        疫苗
+      </span>
+    );
   };
 
   const filteredVaccinations = vaccinations.filter(
@@ -104,9 +126,56 @@ export default function VaccineList() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 bg-white rounded-xl shadow-card p-1">
+          {[
+            { key: "all", label: "全部", icon: null },
+            { key: "vaccine", label: "疫苗", icon: Syringe },
+            { key: "deworming", label: "驱虫", icon: Bug },
+          ].map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTypeFilter(t.key)}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                typeFilter === t.key
+                  ? t.key === "deworming"
+                    ? "bg-secondary-500 text-white"
+                    : t.key === "vaccine"
+                    ? "bg-primary-500 text-white"
+                    : "bg-warm-800 text-white"
+                  : "text-warm-500 hover:bg-warm-50"
+              }`}
+            >
+              {t.icon && <t.icon className="w-4 h-4" />}
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2 bg-white rounded-xl shadow-card p-1">
+          {[
+            { key: "all", label: "全部状态" },
+            { key: "overdue", label: "已过期" },
+            { key: "due", label: "即将到期" },
+          ].map((s) => (
+            <button
+              key={s.key}
+              onClick={() => setStatusFilter(s.key)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                statusFilter === s.key
+                  ? "bg-warm-800 text-white"
+                  : "text-warm-500 hover:bg-warm-50"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex items-center gap-2 border-b border-warm-200">
         {[
-          { key: "reminders", label: "疫苗提醒" },
+          { key: "reminders", label: "到期提醒" },
           { key: "all", label: "全部记录" },
         ].map((tab) => (
           <button
@@ -144,52 +213,56 @@ export default function VaccineList() {
         </div>
       ) : (
         <div className="bg-white rounded-2xl shadow-card overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-warm-50">
-              <tr>
-                <th className="text-left px-6 py-4 text-sm font-medium text-warm-600">宠物</th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-warm-600">主人</th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-warm-600">疫苗名称</th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-warm-600">接种日期</th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-warm-600">下次到期</th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-warm-600">状态</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-warm-100">
-              {(activeTab === "reminders" ? reminders : filteredVaccinations).map((v) => (
-                <tr key={v.id} className="hover:bg-warm-50">
-                  <td className="px-6 py-4">
-                    <span className="font-medium text-warm-900">{v.petName}</span>
-                  </td>
-                  <td className="px-6 py-4 text-warm-600">{v.ownerName}</td>
-                  <td className="px-6 py-4 text-warm-700">{v.vaccineName}</td>
-                  <td className="px-6 py-4 text-warm-500">{v.vaccinationDate}</td>
-                  <td className="px-6 py-4 text-warm-600">
-                    {v.nextDueDate || "-"}
-                    {v.status === "overdue" && "daysUntilDue" in v && (
-                      <span className="text-red-500 text-xs ml-2">
-                        (过期{(v as any).daysUntilDue * -1}天)
-                      </span>
-                    )}
-                    {v.status === "due" && "daysUntilDue" in v && (
-                      <span className="text-warning-600 text-xs ml-2">
-                        (还有{(v as any).daysUntilDue}天)
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`text-xs px-2.5 py-1 rounded-full ${getStatusColor(v.status)}`}>
-                      {getStatusText(v.status)}
-                    </span>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-warm-50">
+                <tr>
+                  <th className="text-left px-6 py-4 text-sm font-medium text-warm-600">类型</th>
+                  <th className="text-left px-6 py-4 text-sm font-medium text-warm-600">宠物</th>
+                  <th className="text-left px-6 py-4 text-sm font-medium text-warm-600">主人</th>
+                  <th className="text-left px-6 py-4 text-sm font-medium text-warm-600">名称</th>
+                  <th className="text-left px-6 py-4 text-sm font-medium text-warm-600">接种日期</th>
+                  <th className="text-left px-6 py-4 text-sm font-medium text-warm-600">下次到期</th>
+                  <th className="text-left px-6 py-4 text-sm font-medium text-warm-600">状态</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-warm-100">
+                {(activeTab === "reminders" ? reminders : filteredVaccinations).map((v) => (
+                  <tr key={v.id} className="hover:bg-warm-50">
+                    <td className="px-6 py-4">{getTypeBadge(v.type)}</td>
+                    <td className="px-6 py-4">
+                      <span className="font-medium text-warm-900">{v.petName}</span>
+                    </td>
+                    <td className="px-6 py-4 text-warm-600">{v.ownerName}</td>
+                    <td className="px-6 py-4 text-warm-700">{v.vaccineName}</td>
+                    <td className="px-6 py-4 text-warm-500">{v.vaccinationDate}</td>
+                    <td className="px-6 py-4 text-warm-600">
+                      {v.nextDueDate || "-"}
+                      {v.status === "overdue" && "daysUntilDue" in v && (
+                        <span className="text-red-500 text-xs ml-2">
+                          (过期{(v as any).daysUntilDue * -1}天)
+                        </span>
+                      )}
+                      {v.status === "due" && "daysUntilDue" in v && (
+                        <span className="text-warning-600 text-xs ml-2">
+                          (还有{(v as any).daysUntilDue}天)
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`text-xs px-2.5 py-1 rounded-full ${getStatusColor(v.status)}`}>
+                        {getStatusText(v.status)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {(activeTab === "reminders" ? reminders : filteredVaccinations).length === 0 && (
             <div className="text-center py-16">
               <Syringe className="w-12 h-12 text-warm-200 mx-auto mb-3" />
-              <p className="text-warm-500">暂无疫苗记录</p>
+              <p className="text-warm-500">暂无提醒记录</p>
             </div>
           )}
         </div>

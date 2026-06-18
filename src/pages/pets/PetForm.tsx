@@ -1,8 +1,16 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Save, PawPrint } from "lucide-react";
+import { ArrowLeft, Save, PawPrint, Plus, Trash2, Syringe, Bug } from "lucide-react";
 import { usePetStore } from "@/store/petStore";
 import { useEffect } from "react";
+
+interface VacRecordInput {
+  type: "vaccine" | "deworming";
+  vaccineName: string;
+  vaccinationDate: string;
+  nextDueDate: string;
+  manufacturer: string;
+}
 
 export default function PetForm() {
   const navigate = useNavigate();
@@ -21,6 +29,7 @@ export default function PetForm() {
     weight: "",
     neutered: false,
   });
+  const [vacRecords, setVacRecords] = useState<VacRecordInput[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -46,6 +55,23 @@ export default function PetForm() {
     }
   }, [isEdit, currentPet]);
 
+  const addVacRecord = (type: "vaccine" | "deworming") => {
+    setVacRecords([
+      ...vacRecords,
+      { type, vaccineName: "", vaccinationDate: "", nextDueDate: "", manufacturer: "" },
+    ]);
+  };
+
+  const updateVacRecord = (index: number, field: keyof VacRecordInput, value: string) => {
+    const updated = [...vacRecords];
+    updated[index] = { ...updated[index], [field]: value };
+    setVacRecords(updated);
+  };
+
+  const removeVacRecord = (index: number) => {
+    setVacRecords(vacRecords.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -64,11 +90,15 @@ export default function PetForm() {
         });
         navigate(`/pets/${id}`);
       } else {
+        const validVacRecords = vacRecords.filter(
+          (v) => v.vaccineName && v.vaccinationDate
+        );
         const pet = await createPet({
           ...formData,
           species: formData.species as "dog" | "cat" | "other",
           gender: formData.gender as "male" | "female",
           weight: parseFloat(formData.weight) || 0,
+          vaccinations: validVacRecords,
         });
         navigate(`/pets/${pet.id}`);
       }
@@ -245,6 +275,115 @@ export default function PetForm() {
               </div>
             </div>
           </div>
+
+          {!isEdit && (
+            <div>
+              <div className="flex items-center justify-between mb-4 pb-2 border-b border-warm-100">
+                <h3 className="text-sm font-semibold text-warm-900">
+                  疫苗/驱虫史 <span className="text-warm-400 font-normal">（可选，建档时一并录入）</span>
+                </h3>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => addVacRecord("vaccine")}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-primary-50 text-primary-700 rounded-lg text-xs font-medium hover:bg-primary-100 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <Syringe className="w-3.5 h-3.5" />
+                    疫苗
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addVacRecord("deworming")}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-secondary-50 text-secondary-700 rounded-lg text-xs font-medium hover:bg-secondary-100 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <Bug className="w-3.5 h-3.5" />
+                    驱虫
+                  </button>
+                </div>
+              </div>
+
+              {vacRecords.length === 0 ? (
+                <p className="text-sm text-warm-400 text-center py-6 bg-warm-50 rounded-xl">
+                  暂未录入疫苗/驱虫记录，可点击上方按钮添加
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {vacRecords.map((record, index) => (
+                    <div
+                      key={index}
+                      className={`p-4 rounded-xl border ${
+                        record.type === "vaccine"
+                          ? "border-primary-100 bg-primary-50/30"
+                          : "border-secondary-100 bg-secondary-50/30"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${
+                          record.type === "vaccine"
+                            ? "bg-primary-100 text-primary-700"
+                            : "bg-secondary-100 text-secondary-700"
+                        }`}>
+                          {record.type === "vaccine" ? <Syringe className="w-3 h-3" /> : <Bug className="w-3 h-3" />}
+                          {record.type === "vaccine" ? "疫苗" : "驱虫"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeVacRecord(index)}
+                          className="text-warm-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="col-span-2">
+                          <label className="block text-xs text-warm-500 mb-1">
+                            {record.type === "vaccine" ? "疫苗名称" : "驱虫药名称"} *
+                          </label>
+                          <input
+                            type="text"
+                            value={record.vaccineName}
+                            onChange={(e) => updateVacRecord(index, "vaccineName", e.target.value)}
+                            className="w-full px-3 py-2 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                            placeholder={record.type === "vaccine" ? "如：犬四联疫苗" : "如：大宠爱"}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-warm-500 mb-1">接种/驱虫日期 *</label>
+                          <input
+                            type="date"
+                            value={record.vaccinationDate}
+                            onChange={(e) => updateVacRecord(index, "vaccinationDate", e.target.value)}
+                            className="w-full px-3 py-2 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-warm-500 mb-1">下次到期日</label>
+                          <input
+                            type="date"
+                            value={record.nextDueDate}
+                            onChange={(e) => updateVacRecord(index, "nextDueDate", e.target.value)}
+                            className="w-full px-3 py-2 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <label className="block text-xs text-warm-500 mb-1">生产厂家</label>
+                          <input
+                            type="text"
+                            value={record.manufacturer}
+                            onChange={(e) => updateVacRecord(index, "manufacturer", e.target.value)}
+                            className="w-full px-3 py-2 border border-warm-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                            placeholder="如：辉瑞、硕腾"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-3 pt-4">
             <button

@@ -195,4 +195,109 @@ router.put("/:id/discharge", (req, res) => {
   });
 });
 
+router.patch("/daily-records/:recordId/notify", (req, res) => {
+  const { recordId } = req.params;
+  const { notified } = req.body;
+
+  db.prepare("UPDATE daily_records SET notified_owner = ? WHERE id = ?").run(notified ? 1 : 0, recordId);
+
+  const record = db.prepare("SELECT * FROM daily_records WHERE id = ?").get(recordId) as any;
+  if (!record) {
+    return res.status(404).json({ success: false, message: "记录不存在" });
+  }
+
+  res.json({
+    success: true,
+    data: {
+      id: record.id,
+      notifiedOwner: !!record.notified_owner,
+    },
+  });
+});
+
+router.get("/:id/owner-feed", (req, res) => {
+  const { id } = req.params;
+  const { filter } = req.query;
+
+  const hosp = db
+    .prepare(
+      `SELECT h.*, p.name as pet_name, p.species as pet_species, p.breed as pet_breed,
+              o.name as owner_name, o.phone as owner_phone
+       FROM hospitalizations h
+       LEFT JOIN pets p ON h.pet_id = p.id
+       LEFT JOIN owners o ON p.owner_id = o.id
+       WHERE h.id = ?`
+    )
+    .get(id) as any;
+
+  if (!hosp) {
+    return res.status(404).json({ success: false, message: "住院记录不存在" });
+  }
+
+  let records = db
+    .prepare(
+      `SELECT * FROM daily_records WHERE hospitalization_id = ? ORDER BY record_date DESC, record_time DESC`
+    )
+    .all(id) as any[];
+
+  const mapped = records.map((r: any) => ({
+    id: r.id,
+    hospitalizationId: r.hospitalization_id,
+    recordDate: r.record_date,
+    recordTime: r.record_time,
+    appetite: r.appetite,
+    spirit: r.spirit,
+    temperature: r.temperature,
+    weight: r.weight,
+    notes: r.notes,
+    notifiedOwner: !!r.notified_owner,
+  }));
+
+  if (filter === "notified") {
+    return res.json({
+      success: true,
+      data: {
+        petName: hosp.pet_name,
+        petSpecies: hosp.pet_species,
+        petBreed: hosp.pet_breed,
+        ownerName: hosp.owner_name,
+        ward: hosp.ward,
+        diagnosis: hosp.diagnosis,
+        status: hosp.status,
+        records: mapped.filter((r) => r.notifiedOwner),
+      },
+    });
+  }
+
+  if (filter === "unnotified") {
+    return res.json({
+      success: true,
+      data: {
+        petName: hosp.pet_name,
+        petSpecies: hosp.pet_species,
+        petBreed: hosp.pet_breed,
+        ownerName: hosp.owner_name,
+        ward: hosp.ward,
+        diagnosis: hosp.diagnosis,
+        status: hosp.status,
+        records: mapped.filter((r) => !r.notifiedOwner),
+      },
+    });
+  }
+
+  res.json({
+    success: true,
+    data: {
+      petName: hosp.pet_name,
+      petSpecies: hosp.pet_species,
+      petBreed: hosp.pet_breed,
+      ownerName: hosp.owner_name,
+      ward: hosp.ward,
+      diagnosis: hosp.diagnosis,
+      status: hosp.status,
+      records: mapped,
+    },
+  });
+});
+
 export default router;

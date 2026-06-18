@@ -4,12 +4,13 @@ import {
   ArrowLeft,
   PawPrint,
   Calendar,
-  Scale,
   Syringe,
+  Bug,
   Edit,
   Plus,
   FileText,
   Stethoscope,
+  X,
 } from "lucide-react";
 import { usePetStore } from "@/store/petStore";
 import type { Pet, Vaccination, MedicalRecord } from "@/types";
@@ -17,9 +18,19 @@ import type { Pet, Vaccination, MedicalRecord } from "@/types";
 export default function PetDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { currentPet, vaccinations, medicalRecords, fetchPetById, fetchVaccinations, fetchMedicalRecords, loading } =
-    usePetStore();
+  const {
+    currentPet,
+    vaccinations,
+    medicalRecords,
+    fetchPetById,
+    fetchVaccinations,
+    fetchMedicalRecords,
+    addVaccination,
+    loading,
+  } = usePetStore();
   const [activeTab, setActiveTab] = useState("records");
+  const [showVacModal, setShowVacModal] = useState(false);
+  const [vacType, setVacType] = useState<"vaccine" | "deworming">("vaccine");
 
   useEffect(() => {
     if (id) {
@@ -90,6 +101,8 @@ export default function PetDetail() {
   }
 
   const pet = currentPet as Pet;
+  const vaccineRecords = vaccinations.filter((v) => v.type !== "deworming");
+  const dewormingRecords = vaccinations.filter((v) => v.type === "deworming");
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -170,7 +183,7 @@ export default function PetDetail() {
       <div className="flex gap-2 border-b border-warm-200">
         {[
           { key: "records", label: "就诊记录", icon: FileText },
-          { key: "vaccine", label: "疫苗接种", icon: Syringe },
+          { key: "vaccine", label: "疫苗与驱虫", icon: Syringe },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -260,66 +273,289 @@ export default function PetDetail() {
       )}
 
       {activeTab === "vaccine" && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <p className="text-warm-500 text-sm">共 {vaccinations.length} 条疫苗记录</p>
-            <button
-              onClick={() => {}}
-              className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              登记接种
-            </button>
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl shadow-card p-5">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-2">
+                <Syringe className="w-5 h-5 text-primary-500" />
+                <h3 className="font-semibold text-warm-900">疫苗接种记录</h3>
+                <span className="text-xs text-warm-400">({vaccineRecords.length})</span>
+              </div>
+              <button
+                onClick={() => {
+                  setVacType("vaccine");
+                  setShowVacModal(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                登记接种
+              </button>
+            </div>
+
+            {vaccineRecords.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-warm-50">
+                    <tr>
+                      <th className="text-left px-6 py-3 text-sm font-medium text-warm-600">疫苗名称</th>
+                      <th className="text-left px-6 py-3 text-sm font-medium text-warm-600">接种日期</th>
+                      <th className="text-left px-6 py-3 text-sm font-medium text-warm-600">下次到期</th>
+                      <th className="text-left px-6 py-3 text-sm font-medium text-warm-600">状态</th>
+                      <th className="text-left px-6 py-3 text-sm font-medium text-warm-600">生产厂家</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-warm-100">
+                    {vaccineRecords.map((v: Vaccination) => (
+                      <tr key={v.id} className="hover:bg-warm-50">
+                        <td className="px-6 py-4">
+                          <span className="font-medium text-warm-900">{v.vaccineName}</span>
+                        </td>
+                        <td className="px-6 py-4 text-warm-600 text-sm">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-warm-400" />
+                            {v.vaccinationDate}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-warm-600 text-sm">
+                          {v.nextDueDate || "-"}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`text-xs px-2.5 py-1 rounded-full border ${getVaccineStatusColor(v.status)}`}>
+                            {getVaccineStatusText(v.status)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-warm-500 text-sm">
+                          {v.manufacturer || "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <Syringe className="w-10 h-10 text-warm-200 mx-auto mb-2" />
+                <p className="text-warm-500 text-sm">暂无疫苗接种记录</p>
+              </div>
+            )}
           </div>
 
-          {vaccinations.length > 0 ? (
-            <div className="bg-white rounded-2xl shadow-card overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-warm-50">
-                  <tr>
-                    <th className="text-left px-6 py-3 text-sm font-medium text-warm-600">疫苗名称</th>
-                    <th className="text-left px-6 py-3 text-sm font-medium text-warm-600">接种日期</th>
-                    <th className="text-left px-6 py-3 text-sm font-medium text-warm-600">下次到期</th>
-                    <th className="text-left px-6 py-3 text-sm font-medium text-warm-600">状态</th>
-                    <th className="text-left px-6 py-3 text-sm font-medium text-warm-600">生产厂家</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-warm-100">
-                  {vaccinations.map((v: Vaccination) => (
-                    <tr key={v.id} className="hover:bg-warm-50">
-                      <td className="px-6 py-4">
-                        <span className="font-medium text-warm-900">{v.vaccineName}</span>
-                      </td>
-                      <td className="px-6 py-4 text-warm-600 text-sm">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-warm-400" />
-                          {v.vaccinationDate}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-warm-600 text-sm">
-                        {v.nextDueDate || "-"}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`text-xs px-2.5 py-1 rounded-full border ${getVaccineStatusColor(v.status)}`}>
-                          {getVaccineStatusText(v.status)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-warm-500 text-sm">
-                        {v.manufacturer || "-"}
-                      </td>
+          <div className="bg-white rounded-2xl shadow-card p-5">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-2">
+                <Bug className="w-5 h-5 text-secondary-500" />
+                <h3 className="font-semibold text-warm-900">驱虫记录</h3>
+                <span className="text-xs text-warm-400">({dewormingRecords.length})</span>
+              </div>
+              <button
+                onClick={() => {
+                  setVacType("deworming");
+                  setShowVacModal(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-secondary-500 text-white rounded-lg text-sm font-medium hover:bg-secondary-600 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                登记驱虫
+              </button>
+            </div>
+
+            {dewormingRecords.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-warm-50">
+                    <tr>
+                      <th className="text-left px-6 py-3 text-sm font-medium text-warm-600">驱虫药名称</th>
+                      <th className="text-left px-6 py-3 text-sm font-medium text-warm-600">驱虫日期</th>
+                      <th className="text-left px-6 py-3 text-sm font-medium text-warm-600">下次到期</th>
+                      <th className="text-left px-6 py-3 text-sm font-medium text-warm-600">状态</th>
+                      <th className="text-left px-6 py-3 text-sm font-medium text-warm-600">生产厂家</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="text-center py-16 bg-white rounded-2xl">
-              <Syringe className="w-12 h-12 text-warm-200 mx-auto mb-3" />
-              <p className="text-warm-500">暂无疫苗接种记录</p>
-            </div>
-          )}
+                  </thead>
+                  <tbody className="divide-y divide-warm-100">
+                    {dewormingRecords.map((v: Vaccination) => (
+                      <tr key={v.id} className="hover:bg-warm-50">
+                        <td className="px-6 py-4">
+                          <span className="font-medium text-warm-900">{v.vaccineName}</span>
+                        </td>
+                        <td className="px-6 py-4 text-warm-600 text-sm">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-warm-400" />
+                            {v.vaccinationDate}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-warm-600 text-sm">
+                          {v.nextDueDate || "-"}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`text-xs px-2.5 py-1 rounded-full border ${getVaccineStatusColor(v.status)}`}>
+                            {getVaccineStatusText(v.status)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-warm-500 text-sm">
+                          {v.manufacturer || "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <Bug className="w-10 h-10 text-warm-200 mx-auto mb-2" />
+                <p className="text-warm-500 text-sm">暂无驱虫记录</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
+
+      {showVacModal && id && (
+        <VacRecordModal
+          petId={parseInt(id)}
+          type={vacType}
+          onClose={() => setShowVacModal(false)}
+          onSuccess={async () => {
+            await fetchVaccinations(parseInt(id));
+            setShowVacModal(false);
+          }}
+          addVaccination={addVaccination}
+        />
+      )}
+    </div>
+  );
+}
+
+interface VacRecordModalProps {
+  petId: number;
+  type: "vaccine" | "deworming";
+  onClose: () => void;
+  onSuccess: () => void;
+  addVaccination: (petId: number, data: Partial<Vaccination>) => Promise<any>;
+}
+
+function VacRecordModal({ petId, type, onClose, onSuccess, addVaccination }: VacRecordModalProps) {
+  const [formData, setFormData] = useState({
+    vaccineName: "",
+    vaccinationDate: "",
+    nextDueDate: "",
+    manufacturer: "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      await addVaccination(petId, {
+        type,
+        vaccineName: formData.vaccineName,
+        vaccinationDate: formData.vaccinationDate,
+        nextDueDate: formData.nextDueDate || undefined,
+        manufacturer: formData.manufacturer || undefined,
+      });
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message || "添加失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 animate-slide-up">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              type === "vaccine" ? "bg-primary-100" : "bg-secondary-100"
+            }`}>
+              {type === "vaccine" ? (
+                <Syringe className="w-5 h-5 text-primary-600" />
+              ) : (
+                <Bug className="w-5 h-5 text-secondary-600" />
+              )}
+            </div>
+            <h3 className="text-lg font-bold text-warm-900">
+              {type === "vaccine" ? "登记疫苗接种" : "登记驱虫记录"}
+            </h3>
+          </div>
+          <button onClick={onClose} className="text-warm-400 hover:text-warm-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm mb-4">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-warm-700 mb-2">
+              {type === "vaccine" ? "疫苗名称" : "驱虫药名称"} <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.vaccineName}
+              onChange={(e) => setFormData({ ...formData, vaccineName: e.target.value })}
+              className="w-full px-4 py-2.5 border border-warm-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+              placeholder={type === "vaccine" ? "如：犬四联疫苗" : "如：大宠爱"}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-warm-700 mb-2">
+              {type === "vaccine" ? "接种日期" : "驱虫日期"} <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={formData.vaccinationDate}
+              onChange={(e) => setFormData({ ...formData, vaccinationDate: e.target.value })}
+              className="w-full px-4 py-2.5 border border-warm-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-warm-700 mb-2">下次到期日</label>
+            <input
+              type="date"
+              value={formData.nextDueDate}
+              onChange={(e) => setFormData({ ...formData, nextDueDate: e.target.value })}
+              className="w-full px-4 py-2.5 border border-warm-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-warm-700 mb-2">生产厂家</label>
+            <input
+              type="text"
+              value={formData.manufacturer}
+              onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
+              className="w-full px-4 py-2.5 border border-warm-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+              placeholder="如：辉瑞、硕腾"
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 border border-warm-200 text-warm-700 rounded-xl font-medium hover:bg-warm-50 transition-colors"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-medium hover:from-primary-600 hover:to-primary-700 transition-all disabled:opacity-50"
+            >
+              {loading ? "保存中..." : "保存"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

@@ -12,21 +12,39 @@ import {
   Send,
   Clock,
   Calendar,
+  Bell,
+  BellOff,
+  CheckCircle2,
+  Circle,
 } from "lucide-react";
 import type { Hospitalization, DailyRecord } from "@/types";
+
+interface OwnerFeed {
+  petName: string;
+  petSpecies: string;
+  petBreed: string;
+  ownerName: string;
+  ward: string;
+  diagnosis: string;
+  status: string;
+  records: DailyRecord[];
+}
 
 export default function HospitalizationDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [hospitalization, setHospitalization] = useState<Hospitalization | null>(null);
+  const [ownerFeed, setOwnerFeed] = useState<OwnerFeed | null>(null);
+  const [feedFilter, setFeedFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
+  const [activeSection, setActiveSection] = useState<"care" | "feed">("care");
   const [showAddRecord, setShowAddRecord] = useState(false);
   const [newRecord, setNewRecord] = useState({
     appetite: "normal",
     spirit: "normal",
     temperature: "38.5",
     notes: "",
-    notifyOwner: false,
+    notifyOwner: true,
   });
 
   useEffect(() => {
@@ -34,6 +52,12 @@ export default function HospitalizationDetail() {
       loadData();
     }
   }, [id]);
+
+  useEffect(() => {
+    if (id) {
+      loadOwnerFeed();
+    }
+  }, [id, feedFilter]);
 
   const loadData = async () => {
     try {
@@ -44,6 +68,17 @@ export default function HospitalizationDetail() {
       console.error("Failed to load hospitalization:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadOwnerFeed = async () => {
+    try {
+      const params = feedFilter !== "all" ? `?filter=${feedFilter}` : "";
+      const res = await fetch(`/api/hospitalizations/${id}/owner-feed${params}`);
+      const data = await res.json();
+      setOwnerFeed(data.data);
+    } catch (error) {
+      console.error("Failed to load owner feed:", error);
     }
   };
 
@@ -70,12 +105,27 @@ export default function HospitalizationDetail() {
           spirit: "normal",
           temperature: "38.5",
           notes: "",
-          notifyOwner: false,
+          notifyOwner: true,
         });
         loadData();
+        loadOwnerFeed();
       }
     } catch (error) {
       console.error("Failed to add record:", error);
+    }
+  };
+
+  const toggleNotify = async (recordId: number, currentNotified: boolean) => {
+    try {
+      await fetch(`/api/hospitalizations/daily-records/${recordId}/notify`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notified: !currentNotified }),
+      });
+      loadData();
+      loadOwnerFeed();
+    } catch (error) {
+      console.error("Failed to toggle notify:", error);
     }
   };
 
@@ -136,6 +186,9 @@ export default function HospitalizationDetail() {
   }
 
   const dailyRecords = hospitalization?.dailyRecords || [];
+  const feedRecords = ownerFeed?.records || [];
+  const notifiedCount = dailyRecords.filter((r) => r.notifiedOwner).length;
+  const unnotifiedCount = dailyRecords.length - notifiedCount;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -197,7 +250,32 @@ export default function HospitalizationDetail() {
         </div>
       </div>
 
-      {showAddRecord && (
+      <div className="flex gap-2 border-b border-warm-200">
+        {[
+          { key: "care", label: "护理记录", icon: Bed },
+          { key: "feed", label: "主人动态", icon: Bell },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveSection(tab.key as "care" | "feed")}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeSection === tab.key
+                ? "border-primary-500 text-primary-600"
+                : "border-transparent text-warm-500 hover:text-warm-700"
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
+            {tab.key === "feed" && unnotifiedCount > 0 && (
+              <span className="ml-1 text-xs px-1.5 py-0.5 bg-warning-500 text-white rounded-full">
+                {unnotifiedCount}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {showAddRecord && activeSection === "care" && (
         <div className="bg-white rounded-2xl shadow-card p-6 animate-slide-up">
           <h3 className="font-semibold text-warm-900 mb-4">添加日常记录</h3>
           <form onSubmit={handleAddRecord} className="space-y-4">
@@ -256,7 +334,7 @@ export default function HospitalizationDetail() {
                 placeholder="其他情况说明..."
               />
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 bg-primary-50 rounded-xl p-3">
               <input
                 type="checkbox"
                 id="notifyOwner"
@@ -264,8 +342,8 @@ export default function HospitalizationDetail() {
                 onChange={(e) => setNewRecord({ ...newRecord, notifyOwner: e.target.checked })}
                 className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500"
               />
-              <label htmlFor="notifyOwner" className="text-sm text-warm-700">
-                通知宠物主人
+              <label htmlFor="notifyOwner" className="text-sm text-warm-700 flex-1 cursor-pointer">
+                推送给宠物主人（保存后主人端可查看此条状态更新）
               </label>
               <Send className="w-4 h-4 text-primary-500" />
             </div>
@@ -288,35 +366,159 @@ export default function HospitalizationDetail() {
         </div>
       )}
 
-      <div>
-        <h3 className="font-semibold text-warm-900 mb-4">日常护理记录</h3>
-        {dailyRecords.length > 0 ? (
-          <div className="relative">
-            <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-warm-200" />
-            <div className="space-y-4">
-              {dailyRecords.map((record: DailyRecord, index: number) => (
-                <div key={record.id} className="relative pl-14">
-                  <div className="absolute left-4 w-5 h-5 bg-white border-4 border-secondary-500 rounded-full" />
-                  <div className="bg-white rounded-xl p-5 shadow-card">
+      {activeSection === "care" && (
+        <div>
+          <div className="flex items-center gap-4 mb-4">
+            <span className="text-sm text-warm-500">共 {dailyRecords.length} 条护理记录</span>
+            <span className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-primary-100 text-primary-700 rounded-full">
+              <Send className="w-3 h-3" /> 已通知 {notifiedCount}
+            </span>
+            <span className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-warm-100 text-warm-600 rounded-full">
+              <BellOff className="w-3 h-3" /> 未通知 {unnotifiedCount}
+            </span>
+          </div>
+          {dailyRecords.length > 0 ? (
+            <div className="relative">
+              <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-warm-200" />
+              <div className="space-y-4">
+                {dailyRecords.map((record: DailyRecord, index: number) => (
+                  <div key={record.id} className="relative pl-14">
+                    <div className={`absolute left-4 w-5 h-5 bg-white border-4 rounded-full ${
+                      record.notifiedOwner ? "border-primary-500" : "border-warm-300"
+                    }`} />
+                    <div className="bg-white rounded-xl p-5 shadow-card">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-warm-400" />
+                          <span className="font-medium text-warm-900">{record.recordDate}</span>
+                          {record.recordTime && (
+                            <>
+                              <Clock className="w-4 h-4 text-warm-400 ml-2" />
+                              <span className="text-warm-500 text-sm">{record.recordTime}</span>
+                            </>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => toggleNotify(record.id, record.notifiedOwner)}
+                          className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full transition-colors ${
+                            record.notifiedOwner
+                              ? "bg-primary-100 text-primary-700 hover:bg-primary-200"
+                              : "bg-warm-100 text-warm-500 hover:bg-warm-200"
+                          }`}
+                        >
+                          {record.notifiedOwner ? (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              已通知主人
+                            </>
+                          ) : (
+                            <>
+                              <Circle className="w-3.5 h-3.5" />
+                              点击通知主人
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4 mb-3">
+                        <div className="flex items-center gap-2">
+                          {getAppetiteIcon(record.appetite)}
+                          <span className="text-sm text-warm-600">饮食：{getAppetiteText(record.appetite)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {getSpiritIcon(record.spirit)}
+                          <span className="text-sm text-warm-600">精神：{getSpiritText(record.spirit)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Thermometer className="w-5 h-5 text-red-500" />
+                          <span className="text-sm text-warm-600">体温：{record.temperature}°C</span>
+                        </div>
+                      </div>
+                      {record.notes && (
+                        <p className="text-sm text-warm-500 bg-warm-50 rounded-lg p-3">
+                          {record.notes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-16 bg-white rounded-2xl">
+              <Bed className="w-12 h-12 text-warm-200 mx-auto mb-3" />
+              <p className="text-warm-500">暂无护理记录</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeSection === "feed" && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl shadow-card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Bell className="w-5 h-5 text-primary-500" />
+                <h3 className="font-semibold text-warm-900">主人可查看的动态</h3>
+              </div>
+              <div className="flex items-center gap-2 bg-warm-50 rounded-lg p-1">
+                {[
+                  { key: "all", label: "全部" },
+                  { key: "notified", label: "已通知" },
+                  { key: "unnotified", label: "未通知" },
+                ].map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => setFeedFilter(f.key)}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      feedFilter === f.key
+                        ? "bg-white text-primary-600 shadow-sm"
+                        : "text-warm-500 hover:text-warm-700"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="bg-primary-50/50 rounded-xl p-4 mb-4">
+              <p className="text-sm text-warm-600">
+                这是宠物主人在客户端能看到的动态列表。保存护理记录时勾选"推送给宠物主人"后，对应记录会出现在这里。
+                未通知的记录主人端不可见，可点击护理记录中的按钮一键切换通知状态。
+              </p>
+            </div>
+
+            {feedRecords.length > 0 ? (
+              <div className="space-y-3">
+                {feedRecords.map((record: DailyRecord) => (
+                  <div
+                    key={record.id}
+                    className={`rounded-xl p-4 border ${
+                      record.notifiedOwner
+                        ? "border-primary-100 bg-primary-50/30"
+                        : "border-warm-100 bg-warm-50/30"
+                    }`}
+                  >
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-warm-400" />
                         <span className="font-medium text-warm-900">{record.recordDate}</span>
                         {record.recordTime && (
-                          <>
-                            <Clock className="w-4 h-4 text-warm-400 ml-2" />
-                            <span className="text-warm-500 text-sm">{record.recordTime}</span>
-                          </>
+                          <span className="text-warm-500 text-sm">{record.recordTime}</span>
                         )}
                       </div>
-                      {record.notifiedOwner && (
-                        <span className="text-xs px-2 py-1 bg-primary-100 text-primary-700 rounded-full flex items-center gap-1">
+                      {record.notifiedOwner ? (
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-primary-100 text-primary-700 rounded-full">
                           <Send className="w-3 h-3" />
-                          已通知主人
+                          主人已可见
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-warm-100 text-warm-500 rounded-full">
+                          <BellOff className="w-3 h-3" />
+                          主人不可见
                         </span>
                       )}
                     </div>
-                    <div className="grid grid-cols-3 gap-4 mb-3">
+                    <div className="grid grid-cols-3 gap-3 mb-2">
                       <div className="flex items-center gap-2">
                         {getAppetiteIcon(record.appetite)}
                         <span className="text-sm text-warm-600">饮食：{getAppetiteText(record.appetite)}</span>
@@ -331,22 +533,24 @@ export default function HospitalizationDetail() {
                       </div>
                     </div>
                     {record.notes && (
-                      <p className="text-sm text-warm-500 bg-warm-50 rounded-lg p-3">
+                      <p className="text-sm text-warm-500 bg-white/60 rounded-lg p-2 mt-2">
                         {record.notes}
                       </p>
                     )}
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <Bell className="w-10 h-10 text-warm-200 mx-auto mb-2" />
+                <p className="text-warm-500 text-sm">
+                  {feedFilter === "notified" ? "暂无已通知记录" : feedFilter === "unnotified" ? "暂无未通知记录" : "暂无动态"}
+                </p>
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="text-center py-16 bg-white rounded-2xl">
-            <Bed className="w-12 h-12 text-warm-200 mx-auto mb-3" />
-            <p className="text-warm-500">暂无护理记录</p>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -11,7 +11,7 @@ interface PetState {
 
   fetchPets: (search?: string) => Promise<void>;
   fetchPetById: (id: number) => Promise<void>;
-  createPet: (petData: Partial<Pet> & { ownerName: string; ownerPhone: string }) => Promise<Pet>;
+  createPet: (petData: Partial<Pet> & { ownerName: string; ownerPhone: string; vaccinations?: Array<{ type: string; vaccineName: string; vaccinationDate: string; nextDueDate?: string; manufacturer?: string }> }) => Promise<Pet>;
   updatePet: (id: number, petData: Partial<Pet>) => Promise<void>;
   fetchMedicalRecords: (petId: number) => Promise<void>;
   fetchVaccinations: (petId: number) => Promise<void>;
@@ -107,8 +107,10 @@ export const usePetStore = create<PetState>((set) => ({
     const result = await res.json();
     if (result.success) {
       set((state) => ({
-        vaccinations: [...state.vaccinations, result.data],
+        vaccinations: [result.data, ...state.vaccinations],
       }));
+      return result.data;
     }
+    throw new Error(result.message || "添加失败");
   },
 }));

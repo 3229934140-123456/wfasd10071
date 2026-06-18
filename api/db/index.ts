@@ -56,6 +56,7 @@ export function initDatabase() {
     CREATE TABLE IF NOT EXISTS vaccinations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       pet_id INTEGER NOT NULL,
+      type TEXT DEFAULT 'vaccine' CHECK(type IN ('vaccine', 'deworming')),
       vaccine_name TEXT NOT NULL,
       vaccination_date DATE NOT NULL,
       next_due_date DATE,
@@ -173,7 +174,22 @@ export function initDatabase() {
     );
   `);
 
+  runMigrations();
   seedData();
+}
+
+function runMigrations() {
+  const columns = db.prepare("PRAGMA table_info(vaccinations)").all() as any[];
+  const hasTypeColumn = columns.some((c) => c.name === "type");
+  if (!hasTypeColumn) {
+    db.exec("ALTER TABLE vaccinations ADD COLUMN type TEXT DEFAULT 'vaccine'");
+  }
+
+  const ownerColumns = db.prepare("PRAGMA table_info(owners)").all() as any[];
+  const hasOwnerLogin = ownerColumns.some((c) => c.name === "password");
+  if (!hasOwnerLogin) {
+    db.exec("ALTER TABLE owners ADD COLUMN password TEXT");
+  }
 }
 
 function seedData() {
@@ -206,14 +222,23 @@ function seedData() {
   const pet5 = insertPet.run(owner4, "黑豆", "dog", "拉布拉多", "male", "2019-08-01", 32.0, 1).lastInsertRowid;
 
   const insertVaccine = db.prepare(
-    "INSERT INTO vaccinations (pet_id, vaccine_name, vaccination_date, next_due_date, manufacturer) VALUES (?, ?, ?, ?, ?)"
+    "INSERT INTO vaccinations (pet_id, type, vaccine_name, vaccination_date, next_due_date, manufacturer) VALUES (?, ?, ?, ?, ?, ?)"
   );
-  insertVaccine.run(pet1, "犬四联疫苗", "2025-01-15", "2026-01-15", "辉瑞");
-  insertVaccine.run(pet1, "狂犬疫苗", "2025-01-15", "2026-01-15", "默沙东");
-  insertVaccine.run(pet2, "猫三联疫苗", "2025-02-20", "2026-02-20", "英特威");
-  insertVaccine.run(pet3, "犬四联疫苗", "2025-03-10", "2026-03-10", "辉瑞");
-  insertVaccine.run(pet4, "猫三联疫苗", "2025-04-01", "2026-04-01", "英特威");
-  insertVaccine.run(pet5, "犬六联疫苗", "2025-02-01", "2026-02-01", "梅里亚");
+  insertVaccine.run(pet1, "vaccine", "犬四联疫苗", "2025-01-15", "2026-01-15", "辉瑞");
+  insertVaccine.run(pet1, "vaccine", "狂犬疫苗", "2025-01-15", "2026-01-15", "默沙东");
+  insertVaccine.run(pet2, "vaccine", "猫三联疫苗", "2025-02-20", "2026-02-20", "英特威");
+  insertVaccine.run(pet3, "vaccine", "犬四联疫苗", "2025-03-10", "2026-03-10", "辉瑞");
+  insertVaccine.run(pet4, "vaccine", "猫三联疫苗", "2025-04-01", "2026-04-01", "英特威");
+  insertVaccine.run(pet5, "vaccine", "犬六联疫苗", "2025-02-01", "2026-02-01", "梅里亚");
+
+  const insertDeworm = db.prepare(
+    "INSERT INTO vaccinations (pet_id, type, vaccine_name, vaccination_date, next_due_date, manufacturer) VALUES (?, ?, ?, ?, ?, ?)"
+  );
+  insertDeworm.run(pet1, "deworming", "体内驱虫（大宠爱）", "2025-05-10", "2025-08-10", "硕腾");
+  insertDeworm.run(pet1, "deworming", "体外驱虫（福来恩）", "2025-05-10", "2025-06-10", "梅里亚");
+  insertDeworm.run(pet2, "deworming", "体内驱虫（大宠爱）", "2025-04-20", "2025-07-20", "硕腾");
+  insertDeworm.run(pet3, "deworming", "体外驱虫（福来恩）", "2025-04-01", "2025-05-01", "梅里亚");
+  insertDeworm.run(pet5, "deworming", "体内驱虫（拜宠清）", "2025-03-15", "2025-06-15", "拜耳");
 
   const insertMedical = db.prepare(
     "INSERT INTO medical_records (pet_id, doctor_id, visit_date, chief_complaint, examination, diagnosis, treatment, weight, temperature, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
